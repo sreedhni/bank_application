@@ -15,6 +15,14 @@ class AccountSerializer(serializers.ModelSerializer):
         model = Account
         fields = "__all__"
 
+class LoanSerializer(serializers.ModelSerializer):
+    loan_type=serializers.StringRelatedField()
+    class Meta:
+        model = LoanDetail
+        fields = "__all__"
+
+
+
 
 
 class AccountListSerializer(serializers.ModelSerializer):

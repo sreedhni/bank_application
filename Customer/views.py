@@ -11,8 +11,7 @@ from django.db.models import Prefetch
 from rest_framework.exceptions import PermissionDenied
 from Staff.serializers import LoanDetailSerializer
 from django.http import Http404
-from Staff.serializers import AccountSerializer
-
+from Staff.serializers import AccountSerializer,LoanSerializer
 
 
 from rest_framework import generics
@@ -24,6 +23,15 @@ class AccountListView(generics.ListAPIView):
     queryset = Account.objects.all()
     serializer_class = AccountSerializer
     permission_classes = [IsAuthenticated]  # Add permissions as needed
+
+class LoanListView(generics.ListAPIView):
+    """
+    API view for listing all account details.
+    """
+    queryset =LoanDetail.objects.all()
+    serializer_class = LoanSerializer
+    permission_classes = [IsAuthenticated]  # Add permissions as needed
+
 
 
 class OpenAccountView(APIView):
@@ -157,10 +165,8 @@ class EditAccountView(APIView):
             serializer = OpenAccountSerializer(account, data=request.data, partial=True)  # Allow partial updates
             if serializer.is_valid():
                 account_type = serializer.validated_data.get('account_type')
-                print(account_type)
                 if account_type:
                     minimum_age = account_type.minimum_age
-                    print(minimum_age)
                     age=serializer.validated_data.get('age')
                     if age is not None and minimum_age > age:
                         return Response({"error": "User does not meet the minimum age requirement for this account type."}, status=status.HTTP_400_BAD_REQUEST)

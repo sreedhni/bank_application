@@ -4,6 +4,7 @@ from Customer import views
 
 urlpatterns = [path('account-application/',views.OpenAccountView.as_view(),name="open-account"),
  path('allaccountdetails/', views.AccountListView.as_view(), name='all-account'),   
+ path('allloandetails/', views.LoanListView.as_view(), name='all-loan'),   
 
  path('accounts/<int:pk>/edit/', views.EditAccountView.as_view(), name='edit_account'),   
  path('my-account/', views.MyAccount.as_view(), name='my-account'),
