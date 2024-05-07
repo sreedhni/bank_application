@@ -12,9 +12,13 @@ from rest_framework.exceptions import PermissionDenied
 from Staff.serializers import LoanDetailSerializer
 from django.http import Http404
 from Staff.serializers import AccountSerializer,LoanSerializer
-
-
+from rest_framework.exceptions import APIException
 from rest_framework import generics
+from .serializers import LoanRepaymentSerializer
+from rest_framework.response import Response
+from rest_framework import status
+
+
 
 class AccountListView(generics.ListAPIView):
     """
@@ -31,8 +35,6 @@ class LoanListView(generics.ListAPIView):
     queryset =LoanDetail.objects.all()
     serializer_class = LoanSerializer
     permission_classes = [IsAuthenticated]  # Add permissions as needed
-
-
 
 class OpenAccountView(APIView):
     """
@@ -90,8 +92,6 @@ class OpenAccountView(APIView):
                 An email containing your account number will be sent to your email address after verification.","data": serializer.data}, status=status.HTTP_201_CREATED)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
 
 
 class MyAccount(APIView):
@@ -179,7 +179,6 @@ class EditAccountView(APIView):
             return Response({"error": "Account not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
 
 
 class DepositeAmountView(APIView):
@@ -242,7 +241,6 @@ class DepositeAmountView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-    
 class WithdrawAmountView(APIView):
     """
     API view for withdrawing an amount from the user's account.
@@ -358,7 +356,6 @@ class LoanApplyView(APIView):
     def delete(self, request, format=None):
         return Response({"error": "DELETE method not allowed for this endpoint"}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
-from rest_framework.exceptions import APIException
 
 class CustomPermissionDenied(APIException):
     status_code = status.HTTP_403_FORBIDDEN
@@ -409,10 +406,6 @@ class LoanDetailView(APIView):
         loan_application.delete()
         return Response({"success": "Loan application deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
     
-from .serializers import LoanRepaymentSerializer
-
-from rest_framework.response import Response
-from rest_framework import status
 
 class LoanRepaymentView(APIView):
     authentication_classes = [JWTAuthentication]

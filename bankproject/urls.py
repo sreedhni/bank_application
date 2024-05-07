@@ -14,18 +14,6 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
-# from django.contrib import admin
-# from django.urls import path, include
-# from rest_framework.schemas import get_schema_view
-
-# schema_view = get_schema_view(title='EMS API Documentation')
-# urlpatterns = [
-#     path('admin/', admin.site.urls),
-#     path('api/user/', include('account.urls')),
-#     path('staff/', include('Staff.urls')),
-#     path('customer/', include('Customer.urls')),
-#     path('api_documentation/', schema_view),  # Add trailing slash and use path()
-# ]
 
 from django.contrib import admin
 from django.urls import path, include

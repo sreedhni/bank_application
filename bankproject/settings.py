@@ -13,6 +13,7 @@ from datetime import timedelta
 
 from pathlib import Path
 from datetime import timedelta
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -53,6 +54,7 @@ INSTALLED_APPS = [
 ]
 
 
+
 EMAIL_HOST = 'sandbox.smtp.mailtrap.io'
 EMAIL_HOST_USER = '7504d3b36ccb9c'
 EMAIL_HOST_PASSWORD = '95b920b78e8a98'
@@ -81,7 +83,6 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'bankproject.urls'
-import os
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',

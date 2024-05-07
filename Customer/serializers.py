@@ -2,14 +2,40 @@ from rest_framework import serializers
 from .models import OpenAccount,LoanApply,LoanDetail
 from Staff.models import AccountType
 from .models import Transaction
+from .models import LoanRepayment
+
 
 class LoanApplySerializer(serializers.ModelSerializer):
+
+    """
+    Serializer for the LoanApply model, providing custom representation and validation.
+
+    Attributes:
+        applicant_name (str): Serialized representation of the applicant's name.
+        loan_name (str): Serialized representation of the loan type.
+    """
+
     applicant_name = serializers.CharField(source='applicant_name.name', read_only=True)
     loan_name=serializers.CharField(source='loan_name.loan_type.loan_type',read_only=True)
     class Meta:
         model = LoanApply
         fields = "__all__"
+
     def validate(self, attrs):
+        """
+        Custom validation to ensure that the loan amount does not exceed the maximum amount allowed
+        for the selected loan type.
+
+        Args:
+            attrs (dict): Dictionary containing the field values.
+
+        Raises:
+            serializers.ValidationError: If the loan amount exceeds the maximum amount allowed.
+
+        Returns:
+            dict: Validated attributes.
+        """
+
         loan_detail = attrs['loanname']
         loan_amount = attrs['loanAmount']
 
@@ -82,9 +108,6 @@ class WithdrawSerializer(serializers.Serializer):
     transaction_account_number = serializers.CharField(max_length=30)
 
 
-
-
-
 class OpenAccountSerializer(serializers.ModelSerializer):
     """
     Serializer for the OpenAccount model.
@@ -100,7 +123,6 @@ class OpenAccountSerializer(serializers.ModelSerializer):
     class Meta:
         model = OpenAccount
         exclude = ('status', 'account_number', 'total_amount')
-
 
 
 class MyAccountSerializer(serializers.ModelSerializer):
@@ -121,7 +143,6 @@ class MyAccountSerializer(serializers.ModelSerializer):
     class Meta:
         model = OpenAccount
         fields = "__all__"
-
 
 
 class EditAccountSerializer(serializers.ModelSerializer):
@@ -179,20 +200,37 @@ class EditAccountSerializer(serializers.ModelSerializer):
     #               'pancard_document', 'adarcard_document', 'branch', 'account_type']
         
 
-
-
-
-
-
-from .models import LoanRepayment
-
 class LoanRepaymentSerializer(serializers.ModelSerializer):
+
+    """
+    Serializer for the LoanRepayment model, providing custom creation logic.
+
+    Attributes:
+        id (int): Unique identifier for the loan repayment.
+        applicant_name (int): ForeignKey to the User model representing the applicant making the repayment.
+        loan_application (int): ForeignKey to the LoanApply model representing the loan application for which
+                                the repayment is made.
+        amount_paid (DecimalField): The amount paid in the repayment.
+        payment_date (DateField): The date when the repayment was made.
+    """
+
     class Meta:
         model = LoanRepayment
         fields = ['id', 'applicant_name', 'loan_application', 'amount_paid', 'payment_date']
         read_only_fields = ['applicant_name', 'payment_date']
 
     def create(self, validated_data):
+
+        """
+        Custom creation method to update the remaining balance of the loan application
+        after a repayment is made.
+
+        Args:
+            validated_data (dict): Dictionary containing the validated data.
+
+        Returns:
+            LoanRepayment: The created LoanRepayment object.
+        """
         loan_repayment = super().create(validated_data)
         loan_application = loan_repayment.loan_application
         remaining_balance = loan_application.loanAmount - loan_repayment.amount_paid
