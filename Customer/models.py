@@ -186,6 +186,7 @@ class LoanApply(models.Model):
     
     def loan_term(self):
         return self.loanname.year
+
     
     def monthly_payment(self):
         """

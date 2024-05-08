@@ -90,7 +90,7 @@ class LoanType(models.Model):
 
     def __str__(self):
         return self.loan_type
-    
+    @property
     def loan_category(self):
         return self.loan_category.account_type
 

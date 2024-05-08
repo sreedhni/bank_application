@@ -95,13 +95,13 @@ class AccountStatusChangeView(APIView):
                 account.save()
                 serialized_account = OpenAccountSerializer(account)
 
-                subject = 'Account Status Change Notification'
-                message = f'Your account status has been changed to {new_status}.'
-                if not account.account_number:
-                    message += f' Your account number is {account_number}.'
-                recipient_email = account.name.email
-                sender_email = 'your_email@example.com'
-                send_mail(subject, message, sender_email, [recipient_email])
+                # subject = 'Account Status Change Notification'
+                # message = f'Your account status has been changed to {new_status}.'
+                # if not account.account_number:
+                #     message += f' Your account number is {account_number}.'
+                # recipient_email = account.name.email
+                # sender_email = 'your_email@example.com'
+                # send_mail(subject, message, sender_email, [recipient_email])
                 return Response(serialized_account.data, status=status.HTTP_200_OK)
             except OpenAccount.DoesNotExist:
                 return Response({"error": "Account not found"}, status=status.HTTP_404_NOT_FOUND)

@@ -13,44 +13,58 @@ from rest_framework import generics, status
 from django.contrib import messages
 from rest_framework import viewsets, status
 
-
+from datetime import datetime
 
 class BudgetPlanView(APIView):
     """
-    API view for adding budget plan details.
+    API view for adding or updating budget plan details.
     
-    This view allows authenticated users to add budget plan details.
+    This view allows authenticated users to add or update budget plan details for the current month.
     """
 
     permission_classes = [IsAuthenticated]
 
     def post(self, request, format=None):
         """
-        Handle POST request for adding budget plan details.
+        Handle POST request for adding or updating budget plan details.
         
         Args:
             request (HttpRequest): The HTTP request object.
             format (str): The format of the request data.
         
         Returns:
-            Response: HTTP response indicating the result of the budget plan addition attempt.
+            Response: HTTP response indicating the result of the budget plan addition or update attempt.
         """
         try:
-            # Ensure the request is authenticated
             if not request.user.is_authenticated:
                 raise AuthenticationFailed("Authentication credentials were not provided.")
 
             serializer = BudgetPlanSerializer(data=request.data)
             if serializer.is_valid():
-                # Assign the current user to the budget plan
-                serializer.save(user=request.user)
-                return Response({"message": "Budget plan details added successfully.", "data": serializer.data}, status=status.HTTP_201_CREATED)
+                current_month = datetime.now().month
+                current_year = datetime.now().year
+                
+                existing_budget_plan = BudgetPlan.objects.select_related('user').filter(
+                    user=request.user,
+                    category=serializer.validated_data['category'],
+                    created_at__month=current_month,
+                    created_at__year=current_year
+                ).first()
+
+                if existing_budget_plan:
+                    existing_budget_plan.amount = serializer.validated_data['amount']
+                    existing_budget_plan.save()
+                    return Response({"message": "Budget plan is exsting so just updating the details  successfully.", "data": serializer.data}, status=status.HTTP_200_OK)
+                else:
+                    serializer.save(user=request.user)
+                    return Response({"message": "Budget plan details added successfully.", "data": serializer.data}, status=status.HTTP_201_CREATED)
             else:
-                # Return detailed error messages if serializer is not valid
                 return Response({"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
         except AuthenticationFailed:
             return Response({"detail": "Authentication credentials were not provided."}, status=status.HTTP_401_UNAUTHORIZED)
+
+
         
         
         
@@ -83,7 +97,7 @@ class BudgetPlanDetailView(APIView):
         """
         try:
             budget_plan = self.get_object(pk)
-            serializer = BudgetPlanSerializer(budget_plan, data=request.data, partial=True)  # Enable partial updates
+            serializer = BudgetPlanSerializer(budget_plan, data=request.data, partial=True)  
             if serializer.is_valid():
                 serializer.save()
                 return Response({"message": "Budget plan details updated successfully.", "data": serializer.data})
@@ -132,29 +146,25 @@ class UserBudgetPlansView(APIView):
             Response: HTTP response containing the budget plans added by the authenticated user.
         """
         try:
-            # Retrieve all budget plans associated with the authenticated user
             user_budget_plans = BudgetPlan.objects.filter(user=request.user)
             
-            # If no budget plans found, return a user-friendly message
             if not user_budget_plans:
                 return Response({"message": "No budget plans found for the authenticated user."}, status=status.HTTP_404_NOT_FOUND)
             
-            # Serialize the budget plans data
             serializer = BudgetPlanSerializer(user_budget_plans, many=True)
             
-            # Construct a user-friendly response
             response_data = {
                 "message": f"Retrieved {len(user_budget_plans)} budget plans for the authenticated user.",
                 "count": len(user_budget_plans),
                 "budget_plans": serializer.data
             }
             
-            # Return the user-friendly response
             return Response(response_data, status=status.HTTP_200_OK)
         
         except Exception as e:
             return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+from datetime import datetime
 
 class AddExpenseView(APIView):
     """
@@ -162,6 +172,8 @@ class AddExpenseView(APIView):
     
     This view allows authenticated users to add expenses.
     """
+
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, format=None):
         """
@@ -175,41 +187,41 @@ class AddExpenseView(APIView):
             Response: HTTP response indicating the result of the expense addition attempt.
         """
         try:
-            # Check if the category ID is provided in the request data
             category_id = request.data.get('category')
             if category_id is None:
                 return Response({"error": "Please provide a category ID."}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Retrieve the budget plan (category) corresponding to the provided ID
             budget_plan = BudgetPlan.objects.filter(pk=category_id, user=request.user).first()
             if budget_plan is None:
                 return Response({"error": "Invalid category ID or category does not belong to you."}, status=status.HTTP_400_BAD_REQUEST)
             
-            # Create a mutable copy of request.data to modify it
-            mutable_data = request.data.copy()
-            # Set the user of the expense to the logged-in user
-            mutable_data['user'] = request.user.id
+            current_month = datetime.now().month
+            current_year = datetime.now().year
+            
+            existing_expense = Expenses.objects.filter(
+                category_id=category_id,
+                created_at__month=current_month,
+                created_at__year=current_year
+            ).first()
 
-            serializer = ExpenseSerializer(data=mutable_data)
+            serializer = ExpenseSerializer(data=request.data)
             if serializer.is_valid():
-                # Check if the expense amount exceeds the budget plan amount
-                if serializer.validated_data['amount'] > budget_plan.amount:
-                    warning_message = "Warning: The expense amount exceeds the budget plan amount."
-                    return Response({"message": "Expense added successfully with warning.", "warning": warning_message, "data": serializer.data}, status=status.HTTP_201_CREATED)
+                if existing_expense:
+                    existing_expense.amount += serializer.validated_data['amount']
+                    existing_expense.save()
+                    if existing_expense.amount > budget_plan.amount:
+                        return Response({"message": "Expense amount exceeds the budget plan amount.", "data": serializer.data}, status=status.HTTP_400_BAD_REQUEST)
+                    else:
+                        return Response({"message": "Expense amount updated successfully.", "data": serializer.data}, status=status.HTTP_200_OK)
                 else:
                     serializer.save()
                     return Response({"message": "Expense added successfully.", "data": serializer.data}, status=status.HTTP_201_CREATED)
             else:
-                # Return detailed error messages if serializer is not valid
                 return Response({"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
         except Exception as e:
-            # Log the exception for debugging purposes
-            logging.error(f"An error occurred while adding the expense: {e}")
-            # Return a generic error message
-            return Response({"detail": "An error occurred while adding the expense. Please try again later."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
+            logging.exception("An error occurred while adding the expense:")
+            return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class ListExpensesView(generics.ListAPIView):
     """
@@ -219,7 +231,6 @@ class ListExpensesView(generics.ListAPIView):
     serializer_class = ExpenseSerializer
 
     def get_queryset(self):
-        # Retrieve all expenses related to categories associated with the logged-in user
         return Expenses.objects.filter(category__user=self.request.user)
     
 
@@ -232,11 +243,9 @@ class RetrieveUpdateDestroyExpenseView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ExpenseSerializer
 
     def get_queryset(self):
-        # Filter expenses by the logged-in user
         return self.queryset.filter(category__user=self.request.user)
 
     def get_object(self):
-        # Get the specific expense object based on the provided ID
         queryset = self.get_queryset()
         obj = get_object_or_404(queryset, pk=self.kwargs.get('pk'))
         return obj
@@ -272,49 +281,36 @@ class RetrieveUpdateDestroyExpenseView(generics.RetrieveUpdateDestroyAPIView):
 class SavingsGoalCreateView(APIView):
     def post(self, request):
         try:
-            # Retrieve target amount from request data
             target_amount = int(request.data.get('target_amount'))
             
-            # Retrieve total amount of the authenticated user's OpenAccount
             open_account = OpenAccount.objects.get(name=request.user.id)
             total_amount = open_account.total_amount
 
-            # Compare target amount with total amount
             if target_amount <= total_amount:
-                # If target amount is less than or equal to total amount, create the savings goal
                 serializer = SavingsGoalSerializer(data=request.data)
                 if serializer.is_valid():
                     serializer.save(user=request.user, current_amount=open_account)
                     return Response({"message": "Savings goal created successfully."}, status=status.HTTP_201_CREATED)
-                # Return validation errors if serializer data is invalid
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
             else:
-                # Return an error message if target amount exceeds total amount
                 return Response({"error": "Target amount exceeds total available amount."}, status=status.HTTP_400_BAD_REQUEST)
         except OpenAccount.DoesNotExist:
-            # Handle the case where OpenAccount does not exist for the authenticated user
             return Response({"error": "OpenAccount not found for the authenticated user."}, status=status.HTTP_404_NOT_FOUND)
         except ValueError:
-            # Handle the case where target_amount is not a valid integer
             return Response({"error": "Invalid target amount. Please provide a valid integer value."}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            # Handle any other unexpected exceptions gracefully
             return Response({"error": "An error occurred while processing the request."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 
 class SavingsGoalViewSet(viewsets.ModelViewSet):
-    # Specify the queryset to include all SavingsGoal objects
     queryset = SavingsGoal.objects.all()
     
-    # Specify the serializer class to use for serialization
     serializer_class = SavingsGoalSerializer
     
-    # Specify the permission classes to restrict access to authenticated users only
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        # Filter the queryset to include only savings goals belonging to the authenticated user
         return self.queryset.filter(user=self.request.user)
 
         

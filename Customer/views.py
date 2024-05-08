@@ -81,15 +81,15 @@ class OpenAccountView(APIView):
             user.has_account = True
             user.save()
             
-            subject = 'New account application'
-            message = f"A new account application has been submitted.\n\n\
-                Name: {serializer.data['name']}\n\
-                Adarnumber: {serializer.data['adhar_number']}\n\
-                Pancard number: {serializer.data['pancard_number']}\n\
-                Branch: {serializer.data['branch']}\n\
-                Account type: {serializer.data['account_type']}"
-            admin_email = 'admin@example.com'  # Replace with the admin's email address
-            send_mail(subject, message, admin_email, [admin_email])
+            # subject = 'New account application'
+            # message = f"A new account application has been submitted.\n\n\
+            #     Name: {serializer.data['name']}\n\
+            #     Adarnumber: {serializer.data['adhar_number']}\n\
+            #     Pancard number: {serializer.data['pancard_number']}\n\
+            #     Branch: {serializer.data['branch']}\n\
+            #     Account type: {serializer.data['account_type']}"
+            # admin_email = 'admin@example.com'  # Replace with the admin's email address
+            # send_mail(subject, message, admin_email, [admin_email])
             return Response({"message": "Your application for opening a new account has been submitted. \
                 An email containing your account number will be sent to your email address after verification.","data": serializer.data}, status=status.HTTP_201_CREATED)
         else:
@@ -376,50 +376,9 @@ class CustomPermissionDenied(APIException):
     default_detail = 'You do not have permission to access this loan application.'
     default_code = 'permission_denied'
 
-class LoanDetailView(APIView):
-    """
-    Endpoint for retrieving, updating, and deleting a loan application.
-    """
-    def get_object(self, pk):
-        try:
-            loan_application = LoanApply.objects.get(pk=pk)
-            if loan_application.applicant_name != self.request.user:
-                raise CustomPermissionDenied()
-            return loan_application
-        except LoanApply.DoesNotExist:
-            raise Http404("Loan application not found")
-
-    def get(self, request, pk, format=None):
-        loan_application = self.get_object(pk)
-        serializer = LoanApplySerializer(loan_application)
-        loan_detail_serializer = LoanDetailSerializer(loan_application.loanname)
-        monthly_payment = loan_application.monthly_payment()  # Calculate monthly payment
-        response_data = {
-            "loan_application": serializer.data,
-            "loan_detail": loan_detail_serializer.data,
-            "monthly_payment": monthly_payment
-        }
-        return Response(response_data, status=status.HTTP_200_OK)
-
-    def put(self, request, pk, format=None):
-        loan_application = self.get_object(pk)
-        
-        # Check if 'loanname' is present in the request data
-        if 'loanname' not in request.data:
-            return Response({"error": "The 'loanname' field is required."}, status=status.HTTP_400_BAD_REQUEST)
-        
-        serializer = LoanApplySerializer(loan_application, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response({"success": "Loan application updated successfully"}, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-    def delete(self, request, pk, format=None):
-        loan_application = self.get_object(pk)
-        loan_application.delete()
-        return Response({"success": "Loan application deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
     
+
+
 
 class LoanRepaymentView(APIView):
     authentication_classes = [JWTAuthentication]
@@ -434,14 +393,14 @@ class LoanRepaymentView(APIView):
             try:
                 # Retrieve the loan applications associated with the user
                 user = request.user
-                loan_applications = LoanApply.objects.filter(applicant_name=user)
-                
+                loan_applications = LoanApply.objects.filter(applicant_name=user).select_related('applicant_name')
+
                 # Check if any of the loan applications are approved
                 approved_loan_applications = loan_applications.filter(status=LoanApply.APPROVED)
                 if not approved_loan_applications.exists():
                     return Response({"error": "No approved loan application found for repayment"},
                                     status=status.HTTP_400_BAD_REQUEST)
-                
+
                 # Extract amount paid from validated data
                 amount_paid = serializer.validated_data.get('amount_paid')
 
@@ -450,35 +409,97 @@ class LoanRepaymentView(APIView):
                     return Response({"error": "Repayment amount must be greater than zero"},
                                     status=status.HTTP_400_BAD_REQUEST)
 
-                # Initialize remaining balance
-                remaining_balance = 0
-
-                # Calculate remaining balance for each approved loan application
                 for loan_application in approved_loan_applications:
-                    remaining_balance += loan_application.loanAmount - amount_paid
+                    if amount_paid > loan_application.loanAmount:
+                        return Response({"error": "Repayment amount exceeds total loan amount"},
+                                        status=status.HTTP_400_BAD_REQUEST)
 
-                # Ensure remaining balance is non-negative
-                if remaining_balance < 0:
-                    return Response({"error": "Repayment amount exceeds total remaining loan balance"},
-                                    status=status.HTTP_400_BAD_REQUEST)
+                    remaining_balance = loan_application.loanAmount - amount_paid
 
-                # If remaining balance becomes zero for any loan, mark it as fully repaid
-                for loan_application in approved_loan_applications:
-                    if remaining_balance == 0:
-                        loan_application.status = LoanApply.FULLY_REPAID
-                        loan_application.applicant_name.has_loan = False
-                        loan_application.applicant_name.save()
-                    loan_application.remaining_balance = remaining_balance
+                    if remaining_balance < 0:
+                        return Response({"error": "Repayment amount exceeds total remaining loan balance"},
+                                        status=status.HTTP_400_BAD_REQUEST)
+
+                if remaining_balance == 0:
+                    loan_application.status = LoanApply.FULLY_REPAID
+                    loan_application.loanAmount=0
                     loan_application.save()
+                    loan_application.applicant_name.has_loan = False
+                    loan_application.applicant_name.save()
+                else:
+                        serializer.save()
 
-                # Create the loan repayment object
-                serializer.save()
 
-                # Return success response with remaining balance
+ 
                 return Response({"success": "Repayment processed successfully",
                                  "remaining_balance": remaining_balance},
                                 status=status.HTTP_201_CREATED)
+                print(loan_application.status)
             except LoanApply.DoesNotExist:
                 return Response({"error": "No loan application found for repayment"},
                                 status=status.HTTP_404_NOT_FOUND)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.response import Response
+from rest_framework import status
+from .models import LoanApply
+from .serializers import LoanApplyEditDeleteSerializer,LoanEditSerializer
+
+from rest_framework.exceptions import PermissionDenied as CustomPermissionDenied
+
+class LoanEditDeleteView(APIView):
+    permission_classes = [IsAuthenticated]  # Ensure only authenticated users can access this endpoint
+
+    def get_object(self, pk):
+        try:
+            loan_application = LoanApply.objects.get(pk=pk)
+            if loan_application.applicant_name != self.request.user:
+                raise CustomPermissionDenied("You do not have permission to access this loan application.")
+            return loan_application
+        except LoanApply.DoesNotExist:
+            raise Http404("Loan application not found")
+
+    def get(self, request, pk, format=None):
+        loan_application = self.get_object(pk)
+        serializer = LoanApplyEditDeleteSerializer(loan_application)
+        loan_detail_serializer = LoanDetailSerializer(loan_application.loanname)
+        monthly_payment = loan_application.monthly_payment()  # Calculate monthly payment
+        response_data = {
+            "loan_application": serializer.data,
+            "loan_detail": loan_detail_serializer.data,
+            "monthly_payment": monthly_payment
+        }
+        return Response(response_data, status=status.HTTP_200_OK)
+
+    def put(self, request, pk, format=None):
+        """
+        Update a loan application.
+        """
+        loan_application = self.get_object(pk)
+        if loan_application.status == 'Approved':
+            raise PermissionDenied("You cannot edit the loan application after it has been approved.")
+        if request.user.id != loan_application.applicant_name.id:
+            return Response({"error": "You do not have permission to edit this data."}, status=status.HTTP_403_FORBIDDEN)
+
+        
+        serializer = LoanEditSerializer(loan_application, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk, format=None):
+        """
+        Delete a loan application.
+        """
+        loan_application = self.get_object(pk)
+        if loan_application.status == 'Approved':
+            raise PermissionDenied("You cannot delete the loan application after it has been approved.")
+        if request.user.id != loan_application.applicant_name.id:
+            return Response({"error": "You do not have permission to delete the application."}, status=status.HTTP_403_FORBIDDEN)
+
+        
+        loan_application.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

@@ -11,8 +11,9 @@ urlpatterns = [path('account-application/',views.OpenAccountView.as_view(),name=
  path('deposit/', views.DepositeAmountView.as_view(), name='transaction-list'),   
  path('loan-apply/', views.LoanApplyView.as_view(), name='loan_apply'),
  path('withdraw/', views.WithdrawAmountView.as_view(), name='withdraw'),  
- path('loan/<int:pk>/', views.LoanDetailView.as_view(), name='loan-detail'), 
  path('repayment/', views.LoanRepaymentView.as_view(), name='loan-repayment'),
+
+path('loan-application/<int:pk>/', views.LoanEditDeleteView.as_view(), name='loan-application-edit'),
 
         
 ]

@@ -16,7 +16,7 @@ class LoanApplySerializer(serializers.ModelSerializer):
     """
 
     applicant_name = serializers.CharField(source='applicant_name.name', read_only=True)
-    loan_name=serializers.CharField(source='loan_name.loan_type.loan_type',read_only=True)
+
     class Meta:
         model = LoanApply
         fields = "__all__"
@@ -43,6 +43,33 @@ class LoanApplySerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Loan amount exceeds maximum amount allowed")
 
         return attrs
+    
+class LoanEditSerializer(serializers.ModelSerializer):
+
+    """
+    Serializer for the LoanApply model, providing custom representation and validation.
+
+    Attributes:
+        applicant_name (str): Serialized representation of the applicant's name.
+        loan_name (str): Serialized representation of the loan type.
+    """
+
+    applicant_name = serializers.CharField(source='applicant_name.name', read_only=True)
+
+    class Meta:
+        model = LoanApply
+        exclude=("status",)
+
+    
+    def validate(self, attrs):
+        loan_detail = attrs.get('loanname')
+        if loan_detail:
+            loan_amount = attrs.get('loanAmount')
+            if loan_amount and loan_amount > loan_detail.maximum_amount:
+                raise serializers.ValidationError("Loan amount exceeds maximum amount allowed")
+        return attrs
+
+
 
 
 class DepositeSerializer(serializers.ModelSerializer):
@@ -236,3 +263,15 @@ class LoanRepaymentSerializer(serializers.ModelSerializer):
         loan_application.remaining_balance = remaining_balance
         loan_application.save()
         return loan_repayment
+    
+
+from rest_framework import serializers
+from .models import LoanApply
+
+class LoanApplyEditDeleteSerializer(serializers.ModelSerializer):
+    applicant_name=serializers.CharField(source='applicant_name.name')
+    loanname=serializers.CharField(source='loanname.loan_type')
+    class Meta:
+        model = LoanApply
+        fields = '__all__'
+
