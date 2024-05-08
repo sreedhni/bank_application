@@ -132,8 +132,7 @@ class MyAccountSerializer(serializers.ModelSerializer):
     This serializer is used to serialize MyAccount instances, including all fields.
     """
     recent_deposition = DepositeSerializer(many=True, read_only=True)
-    recent_withdrawal = WithdrawSerializer(many=True, read_only=True)  # Corrected spelling of withdrawal
-    # Serializer fields
+    recent_withdrawal = WithdrawSerializer(many=True, read_only=True)  
     name = serializers.CharField(source='name.name', read_only=True)
     branch = serializers.StringRelatedField()
     account_type = serializers.StringRelatedField()

@@ -17,6 +17,8 @@ from rest_framework import generics
 from .serializers import LoanRepaymentSerializer
 from rest_framework.response import Response
 from rest_framework import status
+from django.utils import timezone
+from datetime import timedelta
 
 
 
@@ -130,7 +132,6 @@ class MyAccount(APIView):
         # Serialize the account object
 
         serializer = MyAccountSerializer(account)
-        print(serializer.data)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -240,6 +241,7 @@ class DepositeAmountView(APIView):
             return Response(DepositeSerializer(transaction).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+from django.db.models import Sum
 
 class WithdrawAmountView(APIView):
     """
@@ -284,11 +286,20 @@ class WithdrawAmountView(APIView):
                 return Response({"error": "Insufficient balance"}, status=status.HTTP_400_BAD_REQUEST)
             
             if your_account_number==serializer.validated_data.get('transaction_account_number'):
-                return Response({"error": "both account number are same cat proceed the transaction"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"error": "both account number are same cant proceed the transaction"}, status=status.HTTP_400_BAD_REQUEST)
+
+
+            twenty_four_hours_ago = timezone.now() - timedelta(hours=24)
+            total_withdrawals_last_24_hours = Transaction.objects.filter(
+            username=request.user,
+            created_at__gte=twenty_four_hours_ago,
+            ).aggregate(total_withdrawals=Sum('withdraw_amount'))['total_withdrawals'] or 0
+
+            if account.account_type.maximum_transaction_amount_per_day < (total_withdrawals_last_24_hours + withdraw_amount):
+                return Response({"error": "Cannot transfer this much amount within 24 hours"}, status=status.HTTP_400_BAD_REQUEST)
+
 
             
-            if account.account_type.maximum_transaction_amount_per_day < withdraw_amount:
-                return Response({"error": "cant transfer this much amount in a day"}, status=status.HTTP_400_BAD_REQUEST)
             
             if account.upi_pin != upi_pin:
                 return Response({"error": "wrong upi pin"}, status=status.HTTP_400_BAD_REQUEST)
@@ -317,7 +328,10 @@ class WithdrawAmountView(APIView):
             # Update the balance in the OpenAccount object
             account.total_amount = new_balance
             account.save()
-            return Response({"success": "Withdrawal successful", "new_balance": new_balance}, status=status.HTTP_200_OK)
+            return Response({
+            "success": "Withdrawal successful",
+            "new_balance": new_balance,
+            "created_at": transaction.created_at}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 

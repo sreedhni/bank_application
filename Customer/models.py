@@ -50,21 +50,22 @@ class OpenAccount(models.Model):
     account_number = models.CharField(max_length=30, blank=True, null=True, unique=True)
     total_amount = models.PositiveIntegerField(default=0)
     upi_pin=models.CharField(max_length=6)
+
+
     @property
     def recent_deposition(self):
         """
-        Returns queryset of recent deposits for this account.
-        """
-        qs=self.transaction_set.all()
-        return qs
-    
+    Returns queryset of recent deposits for this account.
+    """
+        return self.transaction_set.filter(deposit_amount__isnull=False)
+
     @property
     def recent_withdrawal(self):
         """
         Returns queryset of recent withdrawals for this account.
         """
-        qs=self.transaction_set.all()
-        return qs
+        return self.transaction_set.filter(withdraw_amount__isnull=False)
+    
     @property
     def current_amount(self):
         """
@@ -109,6 +110,7 @@ class Transaction(models.Model):
     withdraw_amount=models.PositiveIntegerField(null=True)
     username=models.ForeignKey(User,on_delete=models.CASCADE)
     transaction_account_number=models.CharField(max_length=30)
+    created_at = models.DateTimeField(auto_now_add=True,null=True)  
 
 
 
