@@ -1,6 +1,5 @@
 from rest_framework import serializers
-from .models import OpenAccount,LoanApply,LoanDetail
-from Staff.models import AccountType
+from .models import OpenAccount,LoanApply
 from .models import Transaction
 from .models import LoanRepayment
 
@@ -93,7 +92,7 @@ class DepositeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Transaction
-        fields = [ 'deposit_amount', 'username', 'your_account_number', 'total_amount']
+        fields = [ 'deposit_amount', 'username', 'your_account_number', 'total_amount','created_at']
 
     def create(self, validated_data):
         """
@@ -105,14 +104,12 @@ class DepositeSerializer(serializers.ModelSerializer):
         Returns:
             Transaction: The newly created transaction object.
         """
-        # Retrieve the your_account_number instance from validated_data
         your_account_number = validated_data.pop('your_account_number', None)
-        # Create the Transaction object with the your_account_number instance
         instance = Transaction.objects.create(your_account_number=your_account_number, **validated_data)
         return instance
 
 
-class WithdrawSerializer(serializers.Serializer):
+class FundTransferViewSerializer(serializers.Serializer):
     """
     Serializer for withdrawing an amount from a user's account.
 
@@ -128,11 +125,20 @@ class WithdrawSerializer(serializers.Serializer):
         The UPI PIN is used for authentication purposes to verify the transaction.
 
     """
-
+    
     your_account_number = serializers.CharField(max_length=30)
     withdraw_amount = serializers.IntegerField()
     upi_pin = serializers.CharField(max_length=6,write_only=True)
     transaction_account_number = serializers.CharField(max_length=30)
+    created_at=serializers.CharField(read_only=True)
+
+class WithdrawSerializer(serializers.Serializer):
+    your_account_number = serializers.CharField(max_length=30)
+    withdraw_amount = serializers.IntegerField()
+    created_at=serializers.CharField(read_only=True)
+    upi_pin = serializers.CharField(max_length=6,write_only=True)
+
+
 
 
 class OpenAccountSerializer(serializers.ModelSerializer):
@@ -142,9 +148,7 @@ class OpenAccountSerializer(serializers.ModelSerializer):
     This serializer is used to serialize OpenAccount instances, excluding certain fields.
 
     """
-    # Serializer fields
     name = serializers.CharField(source='name.name', read_only=True)  
-    # minimum_age = serializers.IntegerField(read_only=True) 
     upi_pin=serializers.IntegerField(write_only=True)
 
     class Meta:
@@ -158,8 +162,6 @@ class MyAccountSerializer(serializers.ModelSerializer):
 
     This serializer is used to serialize MyAccount instances, including all fields.
     """
-    recent_deposition = DepositeSerializer(many=True, read_only=True)
-    recent_withdrawal = WithdrawSerializer(many=True, read_only=True)  
     name = serializers.CharField(source='name.name', read_only=True)
     branch = serializers.StringRelatedField()
     account_type = serializers.StringRelatedField()
@@ -169,6 +171,10 @@ class MyAccountSerializer(serializers.ModelSerializer):
     class Meta:
         model = OpenAccount
         fields = "__all__"
+    recent_withdraw=WithdrawSerializer(many=True,read_only=True)
+    recent_deposition = DepositeSerializer(many=True, read_only=True)
+    recent_transfer = FundTransferViewSerializer(many=True, read_only=True)  
+
 
 
 class EditAccountSerializer(serializers.ModelSerializer):
@@ -220,11 +226,6 @@ class EditAccountSerializer(serializers.ModelSerializer):
         
             return attrs
 
-    # class Meta:
-    #     model = OpenAccount
-    #     fields = ['mobile_number', 'date_of_birth', 'adhar_number', 'pancard_number', 'photo',
-    #               'pancard_document', 'adarcard_document', 'branch', 'account_type']
-        
 
 class LoanRepaymentSerializer(serializers.ModelSerializer):
 
@@ -265,8 +266,6 @@ class LoanRepaymentSerializer(serializers.ModelSerializer):
         return loan_repayment
     
 
-from rest_framework import serializers
-from .models import LoanApply
 
 class LoanApplyEditDeleteSerializer(serializers.ModelSerializer):
     applicant_name=serializers.CharField(source='applicant_name.name')

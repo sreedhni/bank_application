@@ -1,12 +1,5 @@
 from rest_framework import serializers
 from Customer.models import OpenAccount, LoanApply,AccountBranches,AccountType,LoanDetail
-
-# serializers.py
-from rest_framework import serializers
-from .models import Account
-
-# serializers.py
-from rest_framework import serializers
 from .models import Account
 
 class AccountSerializer(serializers.ModelSerializer):
@@ -20,9 +13,6 @@ class LoanSerializer(serializers.ModelSerializer):
     class Meta:
         model = LoanDetail
         fields = "__all__"
-
-
-
 
 
 class AccountListSerializer(serializers.ModelSerializer):
@@ -54,6 +44,7 @@ class AccountStatusChangeSerializer(serializers.Serializer):
         except OpenAccount.DoesNotExist:
             raise serializers.ValidationError("Account does not exist")
         return value
+    
 
     def update(self, instance, validated_data):
         """

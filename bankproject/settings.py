@@ -55,12 +55,15 @@ INSTALLED_APPS = [
 
 
 
+# EMAIL_HOST = 'sandbox.smtp.mailtrap.io'
+# EMAIL_HOST_USER = '7504d3b36ccb9c'
+# EMAIL_HOST_PASSWORD = '95b920b78e8a98'
+# EMAIL_PORT = '2525'
+
 EMAIL_HOST = 'sandbox.smtp.mailtrap.io'
-EMAIL_HOST_USER = '7504d3b36ccb9c'
-EMAIL_HOST_PASSWORD = '95b920b78e8a98'
+EMAIL_HOST_USER = '9c7d70cafdcb54'
+EMAIL_HOST_PASSWORD = 'e6a9b3a4ba96d0'
 EMAIL_PORT = '2525'
-
-
 
 
 

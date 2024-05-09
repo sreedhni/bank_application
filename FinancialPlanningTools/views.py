@@ -278,6 +278,33 @@ class RetrieveUpdateDestroyExpenseView(generics.RetrieveUpdateDestroyAPIView):
 
 
 
+# class SavingsGoalCreateView(APIView):
+#     def post(self, request):
+#         try:
+#             target_amount = int(request.data.get('target_amount'))
+            
+#             open_account = OpenAccount.objects.get(name=request.user.id)
+#             total_amount = open_account.total_amount
+
+#             if target_amount <= total_amount:
+#                 serializer = SavingsGoalSerializer(data=request.data)
+#                 if serializer.is_valid():
+#                     serializer.save(user=request.user, current_amount=open_account)
+#                     return Response({"message": "Savings goal created successfully."}, status=status.HTTP_201_CREATED)
+#                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+#             else:
+#                 return Response({"error": "Target amount exceeds total available amount."}, status=status.HTTP_400_BAD_REQUEST)
+#         except OpenAccount.DoesNotExist:
+#             return Response({"error": "OpenAccount not found for the authenticated user."}, status=status.HTTP_404_NOT_FOUND)
+#         except ValueError:
+#             return Response({"error": "Invalid target amount. Please provide a valid integer value."}, status=status.HTTP_400_BAD_REQUEST)
+#         except Exception as e:
+#             return Response({"error": "An error occurred while processing the request."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+from django.core.mail import send_mail
+from django.conf import settings
+
 class SavingsGoalCreateView(APIView):
     def post(self, request):
         try:
@@ -286,20 +313,40 @@ class SavingsGoalCreateView(APIView):
             open_account = OpenAccount.objects.get(name=request.user.id)
             total_amount = open_account.total_amount
 
-            if target_amount <= total_amount:
-                serializer = SavingsGoalSerializer(data=request.data)
-                if serializer.is_valid():
-                    serializer.save(user=request.user, current_amount=open_account)
-                    return Response({"message": "Savings goal created successfully."}, status=status.HTTP_201_CREATED)
-                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            serializer = SavingsGoalSerializer(data=request.data)
+            if serializer.is_valid():
+                savings_goal = serializer.save(user=request.user, current_amount=open_account)
+
+                if total_amount >= target_amount:
+                    # Send email notification
+                    send_mail(
+                        'Savings Goal Achieved',
+                        f'Congratulations! You have achieved your savings goal of {target_amount}.',
+                        settings.EMAIL_HOST_USER,  # From email address
+                        [request.user.email],  # To email address
+                        fail_silently=False,
+                    )
+                else:
+                    # Send encouragement message if target amount is greater than available amount
+                    send_mail(
+                        'Savings Goal Update',
+                        f'You are currently {target_amount - total_amount} ruppes away from your savings goal of {target_amount}. Keep saving and best of luck!',
+                        settings.EMAIL_HOST_USER,  # From email address
+                        [request.user.email],  # To email address
+                        fail_silently=False,
+                    )
+
+                return Response({"message": "Savings goal created successfully."}, status=status.HTTP_201_CREATED)
             else:
-                return Response({"error": "Target amount exceeds total available amount."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except OpenAccount.DoesNotExist:
             return Response({"error": "OpenAccount not found for the authenticated user."}, status=status.HTTP_404_NOT_FOUND)
         except ValueError:
             return Response({"error": "Invalid target amount. Please provide a valid integer value."}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({"error": "An error occurred while processing the request."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 
 
 

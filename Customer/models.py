@@ -60,11 +60,14 @@ class OpenAccount(models.Model):
         return self.transaction_set.filter(deposit_amount__isnull=False)
 
     @property
-    def recent_withdrawal(self):
+    def recent_transfer(self):
         """
         Returns queryset of recent withdrawals for this account.
         """
         return self.transaction_set.filter(withdraw_amount__isnull=False)
+    @property
+    def recent_withdraw(self):
+        return self.transaction_set.filter(transaction_account_number__isnull=False)
     
     @property
     def current_amount(self):
@@ -82,7 +85,6 @@ class OpenAccount(models.Model):
         return None
     
     def minimum_age_required(self):
-        # Accessing the minimum age required for the associated account type
         return self.account_type.minimum_age
     
     def minimum_age(self):
@@ -199,13 +201,10 @@ class LoanApply(models.Model):
         r = monthly interest rate (annual interest rate / 12)
         n = total number of payments (loan term * 12)
         """
-        # Convert annual interest rate to monthly rate
         monthly_interest_rate = Decimal(self.interest_rate()) / Decimal(12 * 100)
         
-        # Calculate total number of payments
         num_payments = self.loan_term() * 12
         
-        # Calculate monthly payment using the formula
         monthly_payment = self.loanAmount * (monthly_interest_rate * (1 + monthly_interest_rate)**num_payments) / \
                           ((1 + monthly_interest_rate)**num_payments - 1)
         
@@ -224,7 +223,6 @@ class LoanApply(models.Model):
             raise ValueError("Loan amount exceeds maximum amount allowed")
         super().save(*args, **kwargs)
         
-        # Check account existence
         if not self.applicant_name.has_account:
             return HttpResponseBadRequest("You have no account. Create an account.")
         

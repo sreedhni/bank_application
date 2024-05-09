@@ -3,10 +3,12 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.authentication import JWTAuthentication
-from .serializers import OpenAccountSerializer,EditAccountSerializer,DepositeSerializer,LoanApplySerializer,MyAccountSerializer,WithdrawSerializer
+from .serializers import OpenAccountSerializer,DepositeSerializer,LoanApplySerializer,MyAccountSerializer,FundTransferViewSerializer, WithdrawSerializer
 from rest_framework.parsers import MultiPartParser, FormParser, FileUploadParser, JSONParser
 from django.core.mail import send_mail
 from .models import *
+from django.conf import settings
+from django.db.models import Sum
 from django.db.models import Prefetch
 from rest_framework.exceptions import PermissionDenied
 from Staff.serializers import LoanDetailSerializer
@@ -15,10 +17,12 @@ from Staff.serializers import AccountSerializer,LoanSerializer
 from rest_framework.exceptions import APIException
 from rest_framework import generics
 from .serializers import LoanRepaymentSerializer
-from rest_framework.response import Response
-from rest_framework import status
 from django.utils import timezone
 from datetime import timedelta
+from .serializers import LoanApplyEditDeleteSerializer,LoanEditSerializer
+from rest_framework.exceptions import PermissionDenied as CustomPermissionDenied
+
+
 
 
 
@@ -28,7 +32,7 @@ class AccountListView(generics.ListAPIView):
     """
     queryset = Account.objects.all()
     serializer_class = AccountSerializer
-    permission_classes = [IsAuthenticated]  # Add permissions as needed
+    permission_classes = [IsAuthenticated]  
 
 class LoanListView(generics.ListAPIView):
     """
@@ -36,7 +40,7 @@ class LoanListView(generics.ListAPIView):
     """
     queryset =LoanDetail.objects.all()
     serializer_class = LoanSerializer
-    permission_classes = [IsAuthenticated]  # Add permissions as needed
+    permission_classes = [IsAuthenticated]  
 
 class OpenAccountView(APIView):
     """
@@ -90,6 +94,7 @@ class OpenAccountView(APIView):
             #     Account type: {serializer.data['account_type']}"
             # admin_email = 'admin@example.com'  # Replace with the admin's email address
             # send_mail(subject, message, admin_email, [admin_email])
+
             return Response({"message": "Your application for opening a new account has been submitted. \
                 An email containing your account number will be sent to your email address after verification.","data": serializer.data}, status=status.HTTP_201_CREATED)
         else:
@@ -124,13 +129,10 @@ class MyAccount(APIView):
 
     def get(self, request, format=None):
         try:
-            # Fetch the OpenAccount object for the authenticated user
             account = OpenAccount.objects.select_related('account_type').get(name=request.user)
         except OpenAccount.DoesNotExist:
             return Response({"error": "Account not found for this user"}, status=status.HTTP_404_NOT_FOUND)
         
-        # Serialize the account object
-
         serializer = MyAccountSerializer(account)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -157,13 +159,11 @@ class EditAccountView(APIView):
             Response: HTTP response indicating the result of the update operation.
         """
         try:
-            # Fetch the OpenAccount object with related fields prefetched
             account = OpenAccount.objects.select_related('branch', 'account_type').get(pk=pk)
             if request.user != account.name:
                 return Response({"error": "You are not authorized to edit this account"}, status=status.HTTP_403_FORBIDDEN)
             
-            # Serialize the account data with the request data
-            serializer = OpenAccountSerializer(account, data=request.data, partial=True)  # Allow partial updates
+            serializer = OpenAccountSerializer(account, data=request.data, partial=True)  
             if serializer.is_valid():
                 account_type = serializer.validated_data.get('account_type')
                 if account_type:
@@ -173,6 +173,26 @@ class EditAccountView(APIView):
                         return Response({"error": "User does not meet the minimum age requirement for this account type."}, status=status.HTTP_400_BAD_REQUEST)
 
                 serializer.save()
+
+
+
+
+                subject = 'accounted edited'
+                message = f"your account is edited.\n\n\
+                    Name: {serializer.data['name']}\n\
+                    Adarnumber: {serializer.data['adhar_number']}\n\
+                    Pancard number: {serializer.data['pancard_number']}\n\
+                    Branch: {serializer.data['branch']}\n\
+                    Account type: {serializer.data['account_type']}"
+                admin_email = 'admin@example.com'  # Replace with the admin's email address
+                send_mail(subject, message, admin_email, [admin_email])
+
+
+
+
+
+
+
                 return Response(serializer.data, status=status.HTTP_200_OK)
             else:
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -217,7 +237,6 @@ class DepositeAmountView(APIView):
             if not your_account_number:
                 return Response({"error": "Account number is required"}, status=status.HTTP_400_BAD_REQUEST)
             
-            # Fetch the OpenAccount object with related fields prefetched
             try:
                 account = OpenAccount.objects.select_related('name').get(account_number=your_account_number)
             except OpenAccount.DoesNotExist:
@@ -228,11 +247,9 @@ class DepositeAmountView(APIView):
             
             deposit_amount = serializer.validated_data.get('deposit_amount')
             
-            # Check if both deposit_amount and withdraw_amount are not None before performing subtraction
             if deposit_amount is not None:
                 new_balance = account.total_amount + deposit_amount
             else:
-                # Handle the case where either deposit_amount or withdraw_amount is None
                 return Response({"error": "Deposit amount must be provided"}, status=status.HTTP_400_BAD_REQUEST)
                         
             transaction = serializer.save(username=request.user, your_account_number=account)
@@ -241,9 +258,8 @@ class DepositeAmountView(APIView):
             return Response(DepositeSerializer(transaction).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-from django.db.models import Sum
 
-class WithdrawAmountView(APIView):
+class FundTransferView(APIView):
     """
     API view for withdrawing an amount from the user's account.
 
@@ -261,27 +277,20 @@ class WithdrawAmountView(APIView):
         Returns:
             Response: HTTP response indicating the result of the withdrawal attempt.
         """
-        serializer = WithdrawSerializer(data=request.data)
+        serializer = FundTransferViewSerializer(data=request.data)
         if serializer.is_valid():
 
-            # Get the account number from the request data
             your_account_number = serializer.validated_data.get('your_account_number')
-            # Retrieve the account object based on the account number
             try:
-                # Prefetch related data to avoid N+1 query problem
                 account = OpenAccount.objects.select_related('account_type').get(account_number=your_account_number)
             except OpenAccount.DoesNotExist:
                 return Response({"error": "Account not found"}, status=status.HTTP_404_NOT_FOUND)
-            # Check if the user owns the account
             if request.user != account.name:
                 return Response({"error": "You are not authorized to perform this transaction"}, status=status.HTTP_403_FORBIDDEN)
-            # Get the withdraw amount from the serializer data
             withdraw_amount = serializer.validated_data.get('withdraw_amount')
             upi_pin=serializer.validated_data.get('upi_pin')
-            # Check if the withdraw amount is valid
             if withdraw_amount <= 0:
                 return Response({"error": "Invalid withdraw amount"}, status=status.HTTP_400_BAD_REQUEST)
-            # Check if the account has sufficient balance for the withdrawal
             if account.total_amount < withdraw_amount:
                 return Response({"error": "Insufficient balance"}, status=status.HTTP_400_BAD_REQUEST)
             
@@ -305,27 +314,21 @@ class WithdrawAmountView(APIView):
                 return Response({"error": "wrong upi pin"}, status=status.HTTP_400_BAD_REQUEST)
 
 
-            # Calculate the new balance after the withdrawal
             new_balance = account.total_amount - withdraw_amount
             if new_balance < account.account_type.minimum_balance:
-                # Provide a response indicating that the account balance is below the minimum required
                 return Response({"error": "Your account balance is below the minimum required balance. We will credit a certain amount to keep your account balance sufficient."}, status=status.HTTP_400_BAD_REQUEST)
-            # Save the transaction record
             transaction = Transaction.objects.create(
                 your_account_number=account,
                 withdraw_amount=withdraw_amount,
                 username=request.user,
                 transaction_account_number=serializer.validated_data.get('transaction_account_number')
             )
-            # Check if the transaction account number exists
             try:
                 transaction_account = OpenAccount.objects.get(account_number=transaction.transaction_account_number)
             except OpenAccount.DoesNotExist:
                 return Response({"error": "Transaction account not found"}, status=status.HTTP_404_NOT_FOUND)
-            # Add the withdrawn amount to the transaction account number
             transaction_account.total_amount += withdraw_amount
             transaction_account.save()
-            # Update the balance in the OpenAccount object
             account.total_amount = new_balance
             account.save()
             return Response({
@@ -334,6 +337,77 @@ class WithdrawAmountView(APIView):
             "created_at": transaction.created_at}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+class WithdrawView(APIView):
+    """
+    API view for withdrawing an amount from the user's account.
+
+    This view allows authenticated users to withdraw a specified amount from their account.
+    """
+
+    def post(self, request, format=None):
+        """
+        Handle POST request for withdrawing an amount from the user's account.
+
+        Args:
+            request (HttpRequest): The HTTP request object.
+            format (str): The format of the request data.
+
+        Returns:
+            Response: HTTP response indicating the result of the withdrawal attempt.
+        """
+        serializer = WithdrawSerializer(data=request.data)
+        if serializer.is_valid():
+            account_number = serializer.validated_data.get('your_account_number')
+            withdraw_amount = serializer.validated_data.get('withdraw_amount')
+            upi_pin = serializer.validated_data.get('upi_pin')
+
+            try:
+                account = OpenAccount.objects.get(account_number=account_number)
+            except OpenAccount.DoesNotExist:
+                return Response({"error": "Account not found"}, status=status.HTTP_404_NOT_FOUND)
+
+            if request.user != account.name:
+                return Response({"error": "You are not authorized to perform this transaction"}, status=status.HTTP_403_FORBIDDEN)
+
+            if withdraw_amount <= 0:
+                return Response({"error": "Invalid withdraw amount"}, status=status.HTTP_400_BAD_REQUEST)
+
+            if account.total_amount < withdraw_amount:
+                return Response({"error": "Insufficient balance"}, status=status.HTTP_400_BAD_REQUEST)
+
+            if account.upi_pin != upi_pin:
+                return Response({"error": "Wrong UPI PIN"}, status=status.HTTP_400_BAD_REQUEST)
+
+            new_balance = account.total_amount - withdraw_amount
+
+            if new_balance < account.account_type.minimum_balance:
+                return Response({"error": "Your account balance is below the minimum required balance."}, status=status.HTTP_400_BAD_REQUEST)
+
+            twenty_four_hours_ago = timezone.now() - timedelta(hours=24)
+            total_withdrawals_last_24_hours = Transaction.objects.filter(
+                username=request.user,
+                created_at__gte=twenty_four_hours_ago,
+            ).aggregate(total_withdrawals=Sum('withdraw_amount'))['total_withdrawals'] or 0
+
+            if account.account_type.maximum_transaction_amount_per_day < (total_withdrawals_last_24_hours + withdraw_amount):
+                return Response({"error": "Cannot withdraw this much amount within 24 hours"}, status=status.HTTP_400_BAD_REQUEST)
+
+            transaction = Transaction.objects.create(
+                your_account_number=account,
+                withdraw_amount=withdraw_amount,
+                username=request.user,
+            )
+
+            account.total_amount = new_balance
+            account.save()
+
+            return Response({
+                "success": "Withdrawal successful",
+                "new_balance": new_balance,
+                "created_at": transaction.created_at
+            }, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 
@@ -351,7 +425,7 @@ class LoanApplyView(APIView):
         if serializer.is_valid():
             loan_application = serializer.save(applicant_name=request.user)
             loan_detail_serializer = LoanDetailSerializer(loan_application.loanname)
-            monthly_payment = loan_application.monthly_payment()  # Calculate monthly payment
+            monthly_payment = loan_application.monthly_payment()  
             response_data = {
                 "success": "Loan application submitted successfully",
                 "loan_application": serializer.data,
@@ -376,9 +450,6 @@ class CustomPermissionDenied(APIException):
     default_detail = 'You do not have permission to access this loan application.'
     default_code = 'permission_denied'
 
-    
-
-
 
 class LoanRepaymentView(APIView):
     authentication_classes = [JWTAuthentication]
@@ -387,24 +458,19 @@ class LoanRepaymentView(APIView):
     def post(self, request):
         serializer = LoanRepaymentSerializer(data=request.data)
         if serializer.is_valid():
-            # Set the applicant_name field to the authenticated user
             serializer.validated_data['applicant_name'] = request.user
 
             try:
-                # Retrieve the loan applications associated with the user
                 user = request.user
                 loan_applications = LoanApply.objects.filter(applicant_name=user).select_related('applicant_name')
 
-                # Check if any of the loan applications are approved
                 approved_loan_applications = loan_applications.filter(status=LoanApply.APPROVED)
                 if not approved_loan_applications.exists():
                     return Response({"error": "No approved loan application found for repayment"},
                                     status=status.HTTP_400_BAD_REQUEST)
 
-                # Extract amount paid from validated data
                 amount_paid = serializer.validated_data.get('amount_paid')
 
-                # Check if the repayment amount is valid
                 if amount_paid <= 0:
                     return Response({"error": "Repayment amount must be greater than zero"},
                                     status=status.HTTP_400_BAD_REQUEST)
@@ -441,17 +507,8 @@ class LoanRepaymentView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     
-from rest_framework.exceptions import PermissionDenied
-from rest_framework.response import Response
-from rest_framework import status
-from .models import LoanApply
-from .serializers import LoanApplyEditDeleteSerializer,LoanEditSerializer
-
-from rest_framework.exceptions import PermissionDenied as CustomPermissionDenied
-
 class LoanEditDeleteView(APIView):
-    permission_classes = [IsAuthenticated]  # Ensure only authenticated users can access this endpoint
-
+    permission_classes = [IsAuthenticated]  
     def get_object(self, pk):
         try:
             loan_application = LoanApply.objects.get(pk=pk)
@@ -465,7 +522,7 @@ class LoanEditDeleteView(APIView):
         loan_application = self.get_object(pk)
         serializer = LoanApplyEditDeleteSerializer(loan_application)
         loan_detail_serializer = LoanDetailSerializer(loan_application.loanname)
-        monthly_payment = loan_application.monthly_payment()  # Calculate monthly payment
+        monthly_payment = loan_application.monthly_payment()  
         response_data = {
             "loan_application": serializer.data,
             "loan_detail": loan_detail_serializer.data,

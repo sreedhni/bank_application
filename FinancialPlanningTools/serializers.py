@@ -11,6 +11,12 @@ class BudgetPlanSerializer(serializers.ModelSerializer):
         fields = ['id','category', 'amount']
 
 class ExpenseSerializer(serializers.ModelSerializer):
+    """
+    A serializer class for serializing Expenses objects.
+
+    Attributes:
+        budget_planed (CharField): The amount allocated in the budget plan category for the expense (read-only).
+    """
     budget_planed=serializers.CharField(source='category.amount',read_only=True)
     class Meta:
         model = Expenses
