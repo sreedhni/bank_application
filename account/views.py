@@ -109,22 +109,29 @@ class UserLoginView(APIView):
                     return Response({'errors': {"non_field_errors": ['Account is locked. Please try again later.']}}, status=status.HTTP_403_FORBIDDEN)
                 else:
                     token = get_tokens_for_user(user)
-                    user.reset_failed_login_attempts()  # Reset failed login attempts upon successful login
+                    user.reset_failed_login_attempts()  
                     return Response({"token": token, 'msg': 'Login success'}, status=status.HTTP_200_OK)
             else:
-                # Authentication failed
                 try:
                     user = User.objects.get(email=email)
-                    user.increase_failed_login_attempts()  # Increase failed login attempts
+                    user.increase_failed_login_attempts()  
                     if user.check_password(password):
                         return Response({'errors': {"non_field_errors": ['Invalid email']}}, status=status.HTTP_400_BAD_REQUEST)
                     else:
                         return Response({'errors': {"non_field_errors": ['Invalid password']}}, status=status.HTTP_400_BAD_REQUEST)
                 except User.DoesNotExist:
-                    # If the email does not exist, return an error indicating so
                     return Response({'errors': {"non_field_errors": ['Email does not exist']}}, status=status.HTTP_404_NOT_FOUND)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
+
+
+
+
+
+
+
+
+
 
 
 class LogoutAPIView(APIView):

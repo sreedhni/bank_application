@@ -50,7 +50,6 @@ class StaffRegistrationSerializer(serializers.ModelSerializer):
         if password != password2:
             raise serializers.ValidationError("Passwords do not match.")
 
-        # Create a staff member instead of a regular user
         user = User.objects.create_staff(**validated_data, password=password)
         return user
 

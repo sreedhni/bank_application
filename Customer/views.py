@@ -13,15 +13,14 @@ from django.db.models import Prefetch
 from rest_framework.exceptions import PermissionDenied
 from Staff.serializers import LoanDetailSerializer
 from django.http import Http404
-from Staff.serializers import AccountSerializer,LoanSerializer
+from Staff.serializers import AccountSerializer,LoanSerializer,BranchSerializer
 from rest_framework.exceptions import APIException
 from rest_framework import generics
-from .serializers import LoanRepaymentSerializer
 from django.utils import timezone
 from datetime import timedelta
-from .serializers import LoanApplyEditDeleteSerializer,LoanEditSerializer
+from .serializers import LoanApplyEditDeleteSerializer,LoanEditSerializer,LoanRepaymentSerializer
 from rest_framework.exceptions import PermissionDenied as CustomPermissionDenied
-
+from Staff.models import AccountBranches
 
 
 
@@ -33,6 +32,15 @@ class AccountListView(generics.ListAPIView):
     queryset = Account.objects.all()
     serializer_class = AccountSerializer
     permission_classes = [IsAuthenticated]  
+
+class BranchListView(generics.ListAPIView):
+    """
+    API view for listing all account details.
+    """
+    queryset = AccountBranches.objects.all()
+    serializer_class = BranchSerializer
+    permission_classes = [IsAuthenticated]  
+
 
 class LoanListView(generics.ListAPIView):
     """
@@ -85,15 +93,15 @@ class OpenAccountView(APIView):
             user.has_account = True
             user.save()
             
-            # subject = 'New account application'
-            # message = f"A new account application has been submitted.\n\n\
-            #     Name: {serializer.data['name']}\n\
-            #     Adarnumber: {serializer.data['adhar_number']}\n\
-            #     Pancard number: {serializer.data['pancard_number']}\n\
-            #     Branch: {serializer.data['branch']}\n\
-            #     Account type: {serializer.data['account_type']}"
-            # admin_email = 'admin@example.com'  # Replace with the admin's email address
-            # send_mail(subject, message, admin_email, [admin_email])
+            subject = 'New account application'
+            message = f"A new account application has been submitted.\n\n\
+                Name: {serializer.data['name']}\n\
+                Adarnumber: {serializer.data['adhar_number']}\n\
+                Pancard number: {serializer.data['pancard_number']}\n\
+                Branch: {serializer.data['branch']}\n\
+                Account type: {serializer.data['account_type']}"
+            admin_email = 'admin@example.com'  # Replace with the admin's email address
+            send_mail(subject, message, admin_email, [admin_email])
 
             return Response({"message": "Your application for opening a new account has been submitted. \
                 An email containing your account number will be sent to your email address after verification.","data": serializer.data}, status=status.HTTP_201_CREATED)
@@ -160,6 +168,7 @@ class EditAccountView(APIView):
         """
         try:
             account = OpenAccount.objects.select_related('branch', 'account_type').get(pk=pk)
+
             if request.user != account.name:
                 return Response({"error": "You are not authorized to edit this account"}, status=status.HTTP_403_FORBIDDEN)
             
@@ -184,14 +193,8 @@ class EditAccountView(APIView):
                     Pancard number: {serializer.data['pancard_number']}\n\
                     Branch: {serializer.data['branch']}\n\
                     Account type: {serializer.data['account_type']}"
-                admin_email = 'admin@example.com'  # Replace with the admin's email address
+                admin_email = 'admin@example.com'  
                 send_mail(subject, message, admin_email, [admin_email])
-
-
-
-
-
-
 
                 return Response(serializer.data, status=status.HTTP_200_OK)
             else:
@@ -306,13 +309,9 @@ class FundTransferView(APIView):
 
             if account.account_type.maximum_transaction_amount_per_day < (total_withdrawals_last_24_hours + withdraw_amount):
                 return Response({"error": "Cannot transfer this much amount within 24 hours"}, status=status.HTTP_400_BAD_REQUEST)
-
-
-            
             
             if account.upi_pin != upi_pin:
                 return Response({"error": "wrong upi pin"}, status=status.HTTP_400_BAD_REQUEST)
-
 
             new_balance = account.total_amount - withdraw_amount
             if new_balance < account.account_type.minimum_balance:
@@ -410,8 +409,6 @@ class WithdrawView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-
-
 class LoanApplyView(APIView):
     """
     Endpoint for applying for a loan.
@@ -452,8 +449,26 @@ class CustomPermissionDenied(APIException):
 
 
 class LoanRepaymentView(APIView):
+   
+
+
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
+
+
+    """
+    API view for repaying a loan.
+
+    This view allows authenticated users to repay their approved loan amount.
+
+    Authentication:
+        Requires JWT authentication.
+
+    Permissions:
+        Requires the user to be authenticated.
+
+    HTTP Methods Allowed: POST
+    """
 
     def post(self, request):
         serializer = LoanRepaymentSerializer(data=request.data)

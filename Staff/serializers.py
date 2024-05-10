@@ -1,12 +1,21 @@
 from rest_framework import serializers
 from Customer.models import OpenAccount, LoanApply,AccountBranches,AccountType,LoanDetail
 from .models import Account
+from Staff.models import*
 
 class AccountSerializer(serializers.ModelSerializer):
     account_type=serializers.StringRelatedField()
     class Meta:
         model = Account
         fields = "__all__"
+
+class BranchSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AccountBranches
+        fields = "__all__"
+
+
+
 
 class LoanSerializer(serializers.ModelSerializer):
     loan_type=serializers.StringRelatedField()
